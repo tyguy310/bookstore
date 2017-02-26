@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"html/template"
+
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
 
@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"io/ioutil"
 	"encoding/xml"
+
+	"github.com/codegangsta/negroni"
 )
 
 type Page struct {
@@ -25,12 +27,24 @@ type SearchResult struct {
 	ID string `xml:"owi,attr"`
 }
 
+var db *sql.DB
+
+func verifyDatabase(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+	if err := db.Ping(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	next(w, r)
+}
+
 func main() {
 	templates := template.Must(template.ParseFiles("templates/index.html"))
 
-	db, _ := sql.Open("sqlite3", "dev.db")
+	db, _ = sql.Open("sqlite3", "dev.db")
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		p := Page{Name: "Gopher"}
 		if name := r.FormValue("name"); name != "" {
 			p.Name = name
@@ -42,7 +56,7 @@ func main() {
 		}
 	})
 
-	http.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
 		var results []SearchResult
 		var err error
 
@@ -56,15 +70,11 @@ func main() {
 		}
 	})
 
-	http.HandleFunc("/books/add", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/books/add", func(w http.ResponseWriter, r *http.Request) {
 		var book ClassifyBookResponse
 		var err error
 
 		if book, err = find(r.FormValue("id")); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-
-		if err = db.Ping(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 
@@ -75,7 +85,10 @@ func main() {
 		}
 	})
 
-	fmt.Println(http.ListenAndServe(":8080", nil))
+	n := negroni.Classic()
+	n.Use(negroni.HandlerFunc(verifyDatabase))
+	n.UseHandler(mux)
+	n.Run(":8080")
 }
 
 type ClassifySearchResponse struct {
@@ -104,6 +117,7 @@ func find(id string) (ClassifyBookResponse, error) {
 	err = xml.Unmarshal(body, &c)
 	return c, err
 }
+
 func search(query string) ([]SearchResult, error) {
 	var c ClassifySearchResponse
 	body, err := classifyAPI("http://classify.oclc.org/classify2/Classify?&summary=true&title=" + url.QueryEscape(query))
