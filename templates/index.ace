@@ -77,7 +77,7 @@ html
             searchResults.empty();
 
             parsed.forEach(function(result) {
-              var row = $("<tr><td>" + result.Title + "</td><td>" + result.Author + "</td><td>" + result.Year +  "</td><td>" + result.ID + "</td></tr>");
+              var row = $(`<tr><td>${result.Title}</td><td>${result.Author}</td><td>${result.Year}</td><td>${result.ID}</td></tr>`);
               searchResults.append(row);
               row.on("click", function() {
                 $.ajax({
@@ -86,7 +86,7 @@ html
                   success: function(data) {
                     var book = JSON.parse(data);
                     if (!book) return;
-                    $("#view-results").append("<tr><td>" + book.Title + "</td><td>" + book.Author + "</td><td>" + book.Classification + "</td></tr>");
+                    $("#view-results").append(`<tr><td>${book.Title}</td><td>${book.Author}</td><td>${book.Classification}</td></tr>`);
                   }
                 })
               })
